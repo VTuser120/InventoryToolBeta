@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Tool v1.0.1</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --navy: #1a2744;
+    --navy-mid: #243357;
+    --navy-light: #2e4070;
+    --accent: #e8a020;
+    --accent-dim: #c47a10;
+    --green: #2a7a4b;
+    --green-light: #eaf5ee;
+    --red-light: #fdf0ee;
+    --red: #c0392b;
+    --white: #ffffff;
+    --off-white: #f7f8fa;
+    --gray-100: #f0f2f5;
+    --gray-200: #e2e6ed;
+    --gray-400: #9aa3b0;
+    --gray-600: #5a6478;
+    --gray-800: #2d3546;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--off-white); color: var(--gray-800); min-height: 100vh; }
+
+  header {
+    background: var(--navy);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    border-bottom: 3px solid var(--accent);
+    transition: border-color 0.25s ease;
+  }
+  header h1 { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--white); letter-spacing: 0.04em; }
+  header h1 span { color: var(--accent); transition: color 0.25s ease; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  #upload-btn {
+    background: var(--accent); color: var(--navy); border: none;
+    padding: 8px 18px; font-family: var(--mono); font-size: 12px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.05em; transition: background 0.15s, color 0.15s;
+  }
+  #upload-btn:hover { background: var(--white); color: var(--navy); }
+  #file-input { display: none; }
+  #file-status { font-family: var(--mono); font-size: 11px; color: var(--gray-400); }
+  #file-status.loaded { color: #4caf7d; }
+
+  .app { display: flex; height: calc(100vh - 56px); }
+
+  .sidebar {
+    width: 260px; min-width: 260px;
+    background: var(--navy); border-right: 1px solid var(--navy-light);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .sidebar-section { padding: 20px 16px 16px; border-bottom: 1px solid var(--navy-light); }
+  .sidebar-section:last-child { border-bottom: none; }
+  .sidebar-label {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;
+    transition: color 0.25s ease;
+  }
+  .setting-row { margin-bottom: 10px; }
+  .setting-row label { display: block; font-size: 11px; color: var(--gray-400); margin-bottom: 4px; font-family: var(--mono); }
+  .setting-row input, .setting-row select {
+    width: 100%; background: var(--navy-mid); border: 1px solid var(--navy-light);
+    color: var(--white); padding: 6px 8px; font-family: var(--mono); font-size: 12px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .setting-row input:focus, .setting-row select:focus { border-color: var(--accent); }
+  .setting-row select option { background: var(--navy-mid); }
+
+  .dropdown-container { position: relative; width: 100%; }
+  .dropdown-header {
+    background: var(--navy-mid); border: 1px solid var(--navy-light);
+    color: var(--white); padding: 6px 10px; font-family: var(--mono);
+    font-size: 12px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center; user-select: none;
+  }
+  .dropdown-header:hover { border-color: var(--gray-400); }
+  .dropdown-header::after { content: '▼'; font-size: 9px; color: var(--gray-400); transition: transform 0.2s; }
+  .dropdown-container.open .dropdown-header::after { transform: rotate(180deg); }
+  .dropdown-list {
+    display: none; position: absolute; top: 100%; left: 0; width: 100%;
+    background: var(--navy-mid); border: 1px solid var(--navy-light);
+    border-top: none; max-height: 220px; overflow-y: auto; z-index: 50;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .dropdown-container.open .dropdown-list { display: block; }
+  .dropdown-item {
+    padding: 6px 10px; display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--gray-100);
+    cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .dropdown-item:hover { background: var(--navy-light); }
+  .dropdown-item.divider { border-bottom: 1px solid var(--accent); padding-bottom: 4px; margin-bottom: 4px; transition: border-bottom-color 0.25s ease; }
+  .dropdown-item input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px; }
+
+  .run-btn {
+    margin: 16px; background: var(--accent); color: var(--navy); border: none;
+    padding: 10px; font-family: var(--mono); font-size: 12px; font-weight: 600;
+    cursor: pointer; width: calc(100% - 32px); letter-spacing: 0.05em; transition: all 0.15s;
+  }
+  .run-btn:hover { background: var(--white); color: var(--navy); }
+  .run-btn:disabled { background: var(--navy-light); color: var(--gray-400); cursor: not-allowed; }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .tabs {
+    display: flex; background: var(--navy); border-bottom: 1px solid var(--navy-light);
+    padding: 0 24px; align-items: center; justify-content: space-between; overflow-x: auto; gap: 16px;
+  }
+  .tabs-left { display: flex; gap: 0; }
+  .tab {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--gray-400); padding: 14px 16px; cursor: pointer;
+    border-bottom: 3px solid transparent; letter-spacing: 0.04em;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .tab:hover { color: var(--white); }
+  .tab.active { color: var(--white); border-bottom-color: var(--accent); }
+  .tab-badge {
+    display: inline-block; background: var(--navy-light); color: var(--gray-400);
+    font-size: 10px; padding: 1px 6px; margin-left: 6px; border-radius: 2px;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  .tab.active .tab-badge { background: var(--accent); color: var(--navy); }
+
+  .actions-right { display: flex; align-items: center; gap: 12px; }
+  .table-search {
+    background: var(--navy-mid); border: 1px solid var(--navy-light); color: var(--white);
+    padding: 6px 12px; font-family: var(--mono); font-size: 11px; outline: none;
+    width: 200px; transition: border-color 0.15s;
+  }
+  .table-search:focus { border-color: var(--accent); }
+  .table-search::placeholder { color: var(--gray-400); }
+
+  .export-btn {
+    background: transparent; color: var(--gray-400);
+    border: 1px solid var(--navy-light); padding: 6px 14px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.05em; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .export-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .table-area { flex: 1; overflow: auto; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; gap: 12px; color: var(--gray-400);
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+  .empty-state p { font-family: var(--mono); font-size: 13px; text-align: center; line-height: 1.6; }
+
+  .instructions-container { padding: 32px; max-width: 900px; margin: 0 auto; }
+  .instruction-card { background: var(--white); border: 1px solid var(--gray-200); padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+  .instruction-card h3 { font-family: var(--mono); font-size: 14px; color: var(--navy); border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .instruction-card ol, .instruction-card ul { padding-left: 20px; font-size: 13px; color: var(--gray-800); line-height: 1.6; }
+  .instruction-card li { margin-bottom: 8px; }
+  .instruction-card strong { color: var(--navy); }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table thead tr { background: var(--navy); position: sticky; top: 0; z-index: 10; }
+  .data-table thead th {
+    color: var(--white); font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em; padding: 12px 16px; text-align: left; white-space: nowrap;
+    border-right: 1px solid var(--navy-light);
+  }
+  .data-table thead th:last-child { border-right: none; }
+  .data-table tbody tr { border-bottom: 1px solid var(--gray-200); transition: background 0.1s; }
+  .data-table tbody tr:hover { background: #eef1f7; }
+  .data-table tbody tr:nth-child(even) { background: var(--gray-100); }
+  .data-table tbody tr:nth-child(even):hover { background: #eef1f7; }
+  .data-table td { padding: 10px 16px; vertical-align: middle; white-space: nowrap; }
+  .data-table td.item-cell { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--navy); }
+  .data-table td.loc-cell { font-family: var(--mono); font-size: 12px; color: var(--gray-600); }
+  .data-table td.qty-cell { font-family: var(--mono); font-size: 12px; text-align: right; font-weight: 600; }
+  .data-table td.uom-cell { font-family: var(--mono); font-size: 11px; color: var(--gray-400); }
+  .move-to-cell { font-family: var(--mono); font-size: 12px; color: var(--green); font-weight: 600; }
+  .qty-low { color: var(--red); }
+
+  .status-bar {
+    background: var(--navy); padding: 6px 24px; display: flex; align-items: center; gap: 24px;
+    border-top: 1px solid var(--navy-light); flex-wrap: wrap;
+  }
+  .status-item { font-family: var(--mono); font-size: 11px; color: var(--gray-400); }
+  .status-item span { color: var(--accent); font-weight: 600; transition: color 0.25s ease; }
+
+  .table-area::-webkit-scrollbar, .dropdown-list::-webkit-scrollbar { width: 6px; height: 6px; }
+  .table-area::-webkit-scrollbar-track, .dropdown-list::-webkit-scrollbar-track { background: var(--gray-100); }
+  .table-area::-webkit-scrollbar-thumb, .dropdown-list::-webkit-scrollbar-thumb { background: var(--gray-400); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="main-header">INVENTORY <span>TOOL</span></h1>
+  <div class="header-right">
+    <span id="file-status">No file loaded</span>
+    <button id="upload-btn" onclick="document.getElementById('file-input').click()">↑ UPLOAD FILE</button>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" onchange="loadFile(event)">
+  </div>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Global Filters</div>
+      <div class="setting-row">
+        <label>WAREHOUSE</label>
+        <select id="whse-filter" onchange="applyWarehouseColor()">
+          <option value="LDC">LDC</option>
+          <option value="CLE">CLE</option>
+          <option value="WDL">WDL</option>
+          <option value="GRA">GRA</option>
+          <option value="STE">STE</option>
+          <option value="KCS">KCS</option>
+          <option value="IND">IND</option>
+          <option value="MNF">MNF</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>Inventory Status</label>
+        <select id="inv-status">
+          <option value="Y">Y — Active only</option>
+          <option value="N">N — Inactive only</option>
+          <option value="Both">Both</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">CCTR Exclusions</div>
+      <div class="dropdown-container" id="cctr-dropdown">
+        <div class="dropdown-header" id="cctr-header" onclick="toggleDropdown()">Select Exclusions</div>
+        <div class="dropdown-list">
+          <div class="dropdown-item divider" onclick="toggleSelectAllCCTR(event)">
+            <input type="checkbox" id="cctr-select-all">
+            <span>Select All</span>
+          </div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="DSP" checked><span>DSP</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="ZT1" checked><span>ZT1</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="ZT2" checked><span>ZT2</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="ZT3" checked><span>ZT3</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="ZT4" checked><span>ZT4</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="CER"><span>CER</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="LVF"><span>LVF</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="QTZ"><span>QTZ</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="SAF"><span>SAF</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="SAM"><span>SAM</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="STO"><span>STO</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="TOO"><span>TOO</span></div>
+          <div class="dropdown-item" onclick="handleItemClick(event)"><input type="checkbox" value="WHS"><span>WHS</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Consolidation</div>
+      <div class="setting-row">
+        <label>Full Pallet Threshold (SF)</label>
+        <input type="number" id="pallet-thresh" value="250" min="1">
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Under SF Threshold</div>
+      <div class="setting-row">
+        <label>SF Threshold</label>
+        <input type="number" id="sf-thresh" value="30" min="1">
+      </div>
+    </div>
+
+    <button class="run-btn" id="run-btn" onclick="runAnalysis()" disabled>▶ RUN ANALYSIS</button>
+  </div>
+
+  <div class="main">
+    <div class="tabs">
+      <div class="tabs-left">
+        <div class="tab active" data-tab="instructions" onclick="switchTab('instructions')">
+          INFO & INSTRUCTIONS
+        </div>
+        <div class="tab" data-tab="consolidation" onclick="switchTab('consolidation')">
+          CONSOLIDATION <span class="tab-badge" id="badge-con">—</span>
+        </div>
+        <div class="tab" data-tab="under30" onclick="switchTab('under30')">
+          UNDER SF THRESHOLD <span class="tab-badge" id="badge-u30">—</span>
+        </div>
+      </div>
+      <div class="actions-right">
+        <input type="text" id="table-search" class="table-search" placeholder="Search active table..." oninput="handleSearch()" style="display:none;">
+        <button class="export-btn" id="export-btn" onclick="exportCurrent()" disabled>↓ EXPORT XLSX</button>
+      </div>
+    </div>
+
+    <div class="table-area" id="table-area">
+      <div class="instructions-container">
+        <div class="instruction-card">
+          <h3>How to Use the Tool</h3>
+          <ol>
+            <li><strong>Upload Data:</strong> Click the <strong>↑ UPLOAD FILE</strong> button at the top right corner. You can import an AS400 export formatted as either an .xlsx workbook or a .csv file.</li>
+            <li><strong>Configure Parameters:</strong> Adjust the sidebar values to target specific metrics (e.g., select your desired Warehouse code, modify threshold caps, or toggle Cost Center exclusions).</li>
+            <li><strong>Process Analysis:</strong> Click the <strong>▶ RUN ANALYSIS</strong> button to map your data splits dynamically.</li>
+            <li><strong>Review and Export:</strong> Click through any analysis tab to view categorized rows. Use <strong>↓ EXPORT XLSX</strong> to grab individual reports.</li>
+          </ol>
+        </div>
+
+        <div class="instruction-card">
+          <h3>Tab Rules & Filters</h3>
+          <ul>
+            <li><strong>Consolidation:</strong> Identifies matching Item & Serial sets sitting across multiple warehouse storage bins whose individual On-Hand values rest at or below your set Pallet Threshold.</li>
+            <li><strong>Under SF Threshold:</strong> Spots unallocated isolated profiles with On-Hand balances resting lower than your custom threshold limit (Default: 30 SF) for potential rapid bin write-offs.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-item">ROWS: <span id="stat-rows">—</span></div>
+      <div class="status-item">CONSOLIDATION: <span id="stat-con">—</span></div>
+      <div class="status-item">WRITE-OFFS: <span id="stat-u30">—</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let masterData = [];
+let rawData = [];
+let currentTab = 'instructions';
+let results = { consolidation: [], under30: [] };
+let searchQuery = '';
+
+const EXCLUDED_LOCATIONS = new Set(['WOFF','OTHR','DAMG','TDMG','EXP']);
+
+const WAREHOUSE_COLORS = {
+  'LDC': '#e8a020', 'CLE': '#ff6b9b', 'WDL': '#2575fc', 'GRA': '#ff6a00',
+  'STE': '#f1c40f', 'KCS': '#ff4757', 'IND': '#2ed573', 'MNF': '#8e44ad'
+};
+
+function applyWarehouseColor() {
+  const selectedWhse = document.getElementById('whse-filter').value;
+  const targetColor = WAREHOUSE_COLORS[selectedWhse] || '#e8a020';
+  document.documentElement.style.setProperty('--accent', targetColor);
+  if (masterData.length > 0) runAnalysis();
+}
+
+function toggleDropdown() { document.getElementById('cctr-dropdown').classList.toggle('open'); }
+
+window.addEventListener('click', function(e) {
+  const container = document.getElementById('cctr-dropdown');
+  if (!container.contains(e.target)) container.classList.remove('open');
+});
+
+function handleItemClick(e) {
+  if (e.target.tagName !== 'INPUT') {
+    const cb = e.currentTarget.querySelector('input[type="checkbox"]');
+    cb.checked = !cb.checked;
+  }
+  updateHeaderLabel();
+}
+
+function toggleSelectAllCCTR(e) {
+  if (e.target.tagName !== 'INPUT') {
+    const cb = e.currentTarget.querySelector('input[type="checkbox"]');
+    cb.checked = !cb.checked;
+  }
+  const isChecked = document.getElementById('cctr-select-all').checked;
+  const items = document.querySelectorAll('.dropdown-list .dropdown-item:not(.divider) input[type="checkbox"]');
+  items.forEach(cb => cb.checked = isChecked);
+  updateHeaderLabel();
+}
+
+function updateHeaderLabel() {
+  const checked = Array.from(document.querySelectorAll('.dropdown-list .dropdown-item:not(.divider) input[type="checkbox"]:checked'));
+  const total = document.querySelectorAll('.dropdown-list .dropdown-item:not(.divider) input[type="checkbox"]').length;
+  const header = document.getElementById('cctr-header');
+  const selectAllCb = document.getElementById('cctr-select-all');
+
+  if (checked.length === 0) {
+    header.textContent = "0 Excluded";
+    selectAllCb.checked = false;
+  } else if (checked.length === total) {
+    header.textContent = "All Excluded";
+    selectAllCb.checked = true;
+  } else {
+    header.textContent = `${checked.length} Excluded`;
+    selectAllCb.checked = false;
+  }
+}
+
+updateHeaderLabel();
+applyWarehouseColor();
+
+function loadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  
+  if (file.name.endsWith('.csv')) {
+    reader.onload = function(e) {
+      try {
+        const text = e.target.result;
+        const workbook = XLSX.read(text, { type: 'string' });
+        processWorkbook(workbook, file.name);
+      } catch(err) { alert('Error reading CSV file: ' + err.message); }
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = function(e) {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        processWorkbook(wb, file.name);
+      } catch(err) { alert('Error reading workbook file: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  event.target.value = '';
+}
+
+function normalizeKeys(row) {
+  const cleanRow = {};
+  for (const key of Object.keys(row)) {
+    cleanRow[key.trim().toUpperCase()] = row[key];
+  }
+  return cleanRow;
+}
+
+function processWorkbook(wb, filename) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawJson = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  const newData = rawJson.map(normalizeKeys);
+  
+  if (masterData.length > 0) {
+    masterData = masterData.concat(newData);
+    document.getElementById('file-status').textContent = "Multiple files loaded";
+  } else {
+    masterData = newData;
+    document.getElementById('file-status').textContent = filename;
+  }
+  
+  document.getElementById('file-status').classList.add('loaded');
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('stat-rows').textContent = masterData.length.toLocaleString();
+}
+
+function getSettings() {
+  const excluded = Array.from(document.querySelectorAll('.dropdown-list .dropdown-item:not(.divider) input[type="checkbox"]:checked'))
+    .map(cb => cb.value.trim().toUpperCase());
+  return {
+    warehouse: document.getElementById('whse-filter').value,
+    invStatus: document.getElementById('inv-status').value,
+    excluded,
+    palletThresh: parseFloat(document.getElementById('pallet-thresh').value) || 250,
+    sfThresh: parseFloat(document.getElementById('sf-thresh').value) || 30
+  };
+}
+
+function dedupeData(data) {
+  const seen = new Set();
+  return data.filter(r => {
+    const key = `${r['ITEM']}||${r['SERIAL']}||${r['LOCATION']}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function runAnalysis() {
+  if (!masterData.length) return;
+  const s = getSettings();
+
+  document.getElementById('main-header').innerHTML = `${s.warehouse} <span>INVENTORY</span> TOOL`;
+
+  rawData = masterData.filter(r => String(r['WHSE'] || '').trim().toUpperCase() === s.warehouse);
+
+  if (!rawData.length) {
+    Object.keys(results).forEach(k => results[k] = []);
+    renderCurrentTab();
+    updateStatusBarAndBadges();
+    document.getElementById('export-btn').disabled = true;
+    return;
+  }
+
+  const base = rawData.filter(r => {
+    if (String(r['UM'] || '').trim().toUpperCase() !== 'SF') return false;
+    if (s.invStatus !== 'Both' && String(r['INV_STATUS'] || '').trim().toUpperCase() !== s.invStatus) return false;
+    if (s.excluded.includes(String(r['CCTR'] || '').trim().toUpperCase())) return false;
+    if (EXCLUDED_LOCATIONS.has(String(r['LOCATION'] || '').trim().toUpperCase())) return false;
+    return true;
+  });
+
+  const dedupedBase = dedupeData(base);
+
+  results.consolidation = runConsolidation(dedupedBase, s);
+  results.under30 = runUnder30(dedupedBase, s);
+
+  updateStatusBarAndBadges();
+  document.getElementById('export-btn').disabled = (currentTab === 'instructions');
+  renderCurrentTab();
+}
+
+function updateStatusBarAndBadges() {
+  document.getElementById('stat-con').textContent = results.consolidation.length.toLocaleString();
+  document.getElementById('stat-u30').textContent = results.under30.length.toLocaleString();
+  
+  document.getElementById('badge-con').textContent = results.consolidation.length;
+  document.getElementById('badge-u30').textContent = results.under30.length;
+}
+
+function runConsolidation(deduped, s) {
+  const eligible = deduped.filter(r => {
+    const avail = parseFloat(r['AVAILABLE']) || 0;
+    const oh = parseFloat(r['ON HAND']) || 0;
+    return avail > 0 && oh <= s.palletThresh;
+  });
+
+  const groups = {};
+  for (const r of eligible) {
+    const key = `${r['ITEM']}||${r['SERIAL']}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+
+  const rows = [];
+  for (const members of Object.values(groups)) {
+    if (members.length < 2) continue;
+    const maxOH = Math.max(...members.map(r => parseFloat(r['ON HAND']) || 0));
+    const keepRow = members.find(r => (parseFloat(r['ON HAND']) || 0) === maxOH);
+    for (const mf of members.filter(r => r !== keepRow)) {
+      rows.push({
+        item: mf['ITEM'], serial: mf['SERIAL'],
+        moveFrom: mf['LOCATION'], qtyToMove: parseFloat(mf['ON HAND']) || 0,
+        uom: 'SF', moveTo: keepRow['LOCATION']
+      });
+    }
+  }
+  rows.sort((a, b) => String(a.item || '').localeCompare(String(b.item || '')));
+  return rows;
+}
+
+function runUnder30(deduped, s) {
+  const candidates = deduped.filter(r => {
+    const oh = parseFloat(r['ON HAND']) || 0;
+    const alloc = parseFloat(r['ALLOCATED']) || 0;
+    return alloc === 0 && oh > 0 && oh < s.sfThresh;
+  });
+
+  const allComboCounts = {};
+  for (const r of deduped) {
+    const key = `${r['ITEM']}||${r['SERIAL']}`;
+    allComboCounts[key] = (allComboCounts[key] || 0) + 1;
+  }
+
+  return candidates
+    .filter(r => allComboCounts[`${r['ITEM']}||${r['SERIAL']}`] === 1)
+    .map(r => ({ item: r['ITEM'], location: r['LOCATION'], onHand: parseFloat(r['ON HAND']) || 0, uom: 'SF' }))
+    .sort((a, b) => a.onHand - b.onHand);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.getAttribute('data-tab') === tab);
+  });
+  
+  const searchInput = document.getElementById('table-search');
+  if (tab === 'instructions') {
+    searchInput.style.display = 'none';
+  } else {
+    searchInput.style.display = 'inline-block';
+  }
+  
+  renderCurrentTab();
+}
+
+function handleSearch() {
+  searchQuery = document.getElementById('table-search').value.toLowerCase().trim();
+  renderCurrentTab();
+}
+
+function filterRows(rows) {
+  if (!searchQuery) return rows;
+  return rows.filter(r => Object.values(r).some(val => String(val ?? '').toLowerCase().includes(searchQuery)));
+}
+
+function renderCurrentTab() {
+  if (currentTab === 'instructions') {
+    renderInstructions();
+    document.getElementById('export-btn').disabled = true;
+  } else {
+    if (masterData.length > 0 && rawData.length > 0) {
+      document.getElementById('export-btn').disabled = false;
+    }
+    if (currentTab === 'consolidation') renderConsolidation();
+    else if (currentTab === 'under30') renderUnder30();
+  }
+}
+
+function renderInstructions() {
+  document.getElementById('table-area').innerHTML = `
+    <div class="instructions-container">
+      <div class="instruction-card">
+        <h3>How to Use the Tool</h3>
+        <ol>
+          <li><strong>Upload Data:</strong> Click the <strong>↑ UPLOAD FILE</strong> button at the top right corner. You can import an AS400 export formatted as either an .xlsx workbook or a .csv file.</li>
+          <li><strong>Configure Parameters:</strong> Adjust the sidebar values to target specific metrics (e.g., select your desired Warehouse code, modify threshold caps, or toggle Cost Center exclusions).</li>
+          <li><strong>Process Analysis:</strong> Click the <strong>▶ RUN ANALYSIS</strong> button to map your data splits dynamically.</li>
+          <li><strong>Review and Export:</strong> Click through any analysis tab to view categorized rows. Use <strong>↓ EXPORT XLSX</strong> to grab individual reports.</li>
+        </ol>
+      </div>
+      <div class="instruction-card">
+        <h3>Tab Rules & Filters</h3>
+        <ul>
+          <li><strong>Consolidation:</strong> Identifies matching Item & Serial sets sitting across multiple warehouse storage bins whose individual On-Hand values rest at or below your set Pallet Threshold.</li>
+          <li><strong>Under SF Threshold:</strong> Spots unallocated isolated profiles with On-Hand balances resting lower than your custom threshold limit (Default: 30 SF) for potential rapid bin write-offs.</li>
+        </ul>
+      </div>
+    </div>`;
+}
+
+function renderConsolidation() {
+  const area = document.getElementById('table-area');
+  const rows = filterRows(results.consolidation);
+  if (!rows.length) {
+    area.innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>No consolidation opportunities found.</p></div>'; return;
+  }
+  let html = '<table class="data-table"><thead><tr><th>ITEM</th><th>SERIAL</th><th>MOVE FROM</th><th style="text-align:right">QTY TO MOVE</th><th>UOM</th><th>MOVE TO</th></tr></thead><tbody>';
+  for (const r of rows) html += `<tr><td class="item-cell">${esc(r.item)}</td><td class="loc-cell">${esc(r.serial)}</td><td class="loc-cell">${esc(r.moveFrom)}</td><td class="qty-cell">${fmt(r.qtyToMove)}</td><td class="uom-cell">${esc(r.uom)}</td><td class="move-to-cell">${esc(r.moveTo)}</td></tr>`;
+  area.innerHTML = html + '</tbody></table>';
+}
+
+function renderUnder30() {
+  const area = document.getElementById('table-area');
+  const rows = filterRows(results.under30);
+  if (!rows.length) {
+    area.innerHTML = '<div class="empty-state"><div class="icon">✓</div><p>No write-off candidates found.</p></div>'; return;
+  }
+  let html = '<table class="data-table"><thead><tr><th>ITEM</th><th>LOCATION</th><th style="text-align:right">ON HAND</th><th>UOM</th></tr></thead><tbody>';
+  for (const r of rows) html += `<tr><td class="item-cell">${esc(r.item)}</td><td class="loc-cell">${esc(r.location)}</td><td class="qty-cell${r.onHand < 5 ? ' qty-low' : ''}">${fmt(r.onHand)}</td><td class="uom-cell">${esc(r.uom)}</td></tr>`;
+  area.innerHTML = html + '</tbody></table>';
+}
+
+function exportCurrent() {
+  if (currentTab === 'instructions') return;
+  const today = new Date().toISOString().slice(0,10);
+  let sheetName = '';
+  let exportData = [];
+
+  if (currentTab === 'consolidation') {
+    sheetName = 'Consolidation';
+    exportData = results.consolidation.map(r => ({
+      'Item': r.item,
+      'Serial': r.serial,
+      'Move From': r.moveFrom,
+      'Qty to Move': r.qtyToMove,
+      'UOM': r.uom,
+      'Move To': r.moveTo
+    }));
+  } else if (currentTab === 'under30') {
+    sheetName = 'Under SF Threshold';
+    exportData = results.under30.map(r => ({
+      'Item': r.item,
+      'Location': r.location,
+      'On Hand': r.onHand,
+      'UOM': r.uom
+    }));
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, `${sheetName}_${today}.xlsx`);
+}
+
+function esc(v) { return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmt(n) { return Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+</script>
+</body>
+</html>
